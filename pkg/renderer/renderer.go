@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"errors"
 	"saint-angels/glsl-goback/pkg/models"
+	"io"
+	"bytes"
 )
 
 func Render(artId int) (error) {
@@ -26,28 +28,64 @@ func Render(artId int) (error) {
     ffmpegEncoding := "rgb24"
     videoDuration := "10"
     outputPath := fmt.Sprintf("./renders/%d_%s.avi", artId, shaderName)
-    cmdShady := fmt.Sprintf(
-        "%s -i %s -ofmt %s -g %s -f 30",
-        shadyPath,
-        shaderPath,
-        encodingShady,
-        resolution,
-    )
-    cmdffmpeg := fmt.Sprintf(
-        "%s -hide_banner -loglevel error -f rawvideo -pixel_format %s -video_size %s -framerate 30 -t %s -i - %s -y",
-        ffmpegPath,
-        ffmpegEncoding,
-        resolution,
-        videoDuration,
-        outputPath,
-    )
-    cmdCombined := fmt.Sprintf("%s | %s", cmdShady, cmdffmpeg)
-    fmt.Println("cmd:" + cmdCombined)
-    out, err := exec.Command("bash","-c", cmdCombined).CombinedOutput()
-    fmt.Printf(">shady+ffmpeg\n  %s\n",out)
+    // cmdShady := fmt.Sprintf(
+    //     "%s -i %s -ofmt %s -g %s -f 30",
+    //     shadyPath,
+    //     shaderPath,
+    //     encodingShady,
+    //     resolution,
+    // )
+    // cmdffmpeg := fmt.Sprintf(
+    //     "%s -hide_banner -loglevel error -f rawvideo -pixel_format %s -video_size %s -framerate 30 -t %s -i - %s -y",
+    //     ffmpegPath,
+    //     ffmpegEncoding,
+    //     resolution,
+    //     videoDuration,
+    //     outputPath,
+    // )
 
-	return err
+	c1 := exec.Command(
+		shadyPath,
+		"-i", shaderPath,
+		"-ofmt", encodingShady,
+		"-g", resolution,
+		"-f", "30",
+	)
+	c2 := exec.Command(
+		ffmpegPath,
+		// "-hide_banner", "-loglevel error", //At the moment using these options break the renderer?!!
+		"-f", "rawvideo",
+		"-pixel_format", ffmpegEncoding,
+		"-video_size", resolution,
+		"-framerate", "30",
+		"-t", videoDuration,
+		"-i", "-", outputPath, "-y",
+	)
+    fmt.Println("shady cmd:" + c1.String())
+    fmt.Println("ffmpeg cmd:" + c2.String())
+	readPipe, writePipe := io.Pipe()
+	c1.Stdout = writePipe
+	c2.Stdin = readPipe
+    var outputBuffer bytes.Buffer
+    c2.Stdout = &outputBuffer
+	err = c1.Start()
+	if err != nil {
+		return err
+	}
+    err = c2.Start()
+	if err != nil {
+		return err
+	}
+    go func() {
+        defer writePipe.Close()
+        c1.Wait()
+    }()
+    c2.Wait()
+    fmt.Printf(">shady+ffmpeg\n  %s\n", outputBuffer.String())
+
+	return nil
 }
+
 // https://medium.com/@j.d.livni/write-a-go-worker-pool-in-15-minutes-c9b42f640923
 type Work struct {
 	ID	int
@@ -83,35 +121,3 @@ func (w *Worker) Stop() {
 	w.End <- true
 }
 
-//TODO: Rewrite cmd calls to that
-    // path, err := exec.LookPath("shady")
-    // if err != nil {
-    //    app.serverError(w, errors.New("shady not found"))
-    //    return
-    // }
-    // app.infoLog.Printf("shady path: %s",path)
-    //
-    // shaderName := "seascape"
-    // shaderPath := "./shaders/" + shaderName + ".glsl"
-    // encoding := "x11"
-    // resolution := "1080x1080"
-    // cmdShady := exec.Command("/home/teeth/go/bin/shady", "-i", shaderPath, "-ofmt", encoding, "-g",resolution, "-framerate", "30")
-    // stdoutStderr, err := cmdShady.CombinedOutput()
-
-    // app.infoLog.Printf("shady output: %s",stdoutStderr)
-    // if err != nil {
-    //    app.serverError(w, err)
-    //    return
-    // }
-
-    // videoDuration := "10"
-    // outputPath := "./renders/" + shaderName
-    // cmdffmpeg := exec.Command(
-    //     "/usr/bin/ffmpeg",
-    //     "-f", "rawvideo",
-    //     "-pixel_format", "rgb24",
-    //     "-video_size", "1080x1080",
-    //     "-framerate", "30",
-    //     "-t", videoDuration,
-    //     "-i", "-", outputPath,
-    //     "-y")
