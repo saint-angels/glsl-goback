@@ -7,6 +7,8 @@ import (
 	"saint-angels/shaderbox/pkg/models"
 	"io"
 	"bytes"
+	"time"
+	"saint-angels/shaderbox/pkg/models/mysql"
 )
 
 func Render(artId int) (error) {
@@ -28,21 +30,6 @@ func Render(artId int) (error) {
     ffmpegEncoding := "rgb24"
     videoDuration := "10"
     outputPath := fmt.Sprintf("./renders/%d_%s.avi", artId, shaderName)
-    // cmdShady := fmt.Sprintf(
-    //     "%s -i %s -ofmt %s -g %s -f 30",
-    //     shadyPath,
-    //     shaderPath,
-    //     encodingShady,
-    //     resolution,
-    // )
-    // cmdffmpeg := fmt.Sprintf(
-    //     "%s -hide_banner -loglevel error -f rawvideo -pixel_format %s -video_size %s -framerate 30 -t %s -i - %s -y",
-    //     ffmpegPath,
-    //     ffmpegEncoding,
-    //     resolution,
-    //     videoDuration,
-    //     outputPath,
-    // )
 
 	c1 := exec.Command(
 		shadyPath,
@@ -81,7 +68,7 @@ func Render(artId int) (error) {
         c1.Wait()
     }()
     c2.Wait()
-    fmt.Printf(">shady+ffmpeg\n  %s\n", outputBuffer.String())
+    fmt.Printf(">shady+ffmpeg\n %s\n", outputBuffer.String())
 
 	return nil
 }
@@ -89,7 +76,7 @@ func Render(artId int) (error) {
 // https://medium.com/@j.d.livni/write-a-go-worker-pool-in-15-minutes-c9b42f640923
 type Work struct {
 	ID	int
-	Job models.Artwork//Replace with data needed for rendering
+	Job *models.Artwork//Replace with data needed for rendering
 }
 
 type Worker struct {
@@ -99,17 +86,20 @@ type Worker struct {
 	End chan bool
 }
 
+//TODO: put it inside StartDispatcher
 func (w *Worker) Start() {
 	go func() {
 		for {
-			//Provide worker's channel in a queue to notify that it's free
+			//Provide worker's channel in a queue to notify collector that it's free
 			w.WorkerChannel <-w.Channel
 			select {
-			case job := <-w.Channel: // worker has received job
-				// work.DoWork(job.Job, w.ID) // do work
-				fmt.Printf("worker %d did some work with artwork %d", w.ID, job.ID)
-			case <-w.End:
-				return
+				case artwork := <-w.Channel: // worker has received job
+					Render(artwork.ID)
+					// work.DoWork(job.Job, w.ID) // do work
+					// time.Sleep(5 * time.Second)
+					fmt.Printf("worker %d did some work with artwork %d\n", w.ID, artwork.ID)
+				case <-w.End:
+					return
 			}
 		}
 	}()
@@ -121,3 +111,62 @@ func (w *Worker) Stop() {
 	w.End <- true
 }
 
+var WorkerChannel = make(chan chan Work)
+
+type Collector struct {
+	Work chan Work // receives jobs to send to workers
+	End chan bool // when receives bool stops workers
+}
+
+func StartDispatcher(workerCount int, artworkModel *mysql.ArtworkModel) Collector {
+	var i int
+	var workers []Worker
+	input := make(chan Work, 1) // channel to recieve work
+	end := make(chan bool) // channel to kill workers
+	collector := Collector{Work: input, End: end}
+
+	for i < workerCount {
+		i++
+		fmt.Println("starting worker: ", i)
+		worker := Worker{
+				ID: i,
+				Channel: make(chan Work),
+				WorkerChannel: WorkerChannel,
+				End: make(chan bool)}
+		worker.Start()
+		workers = append(workers, worker) // stores worker
+	}
+
+	// start collector
+	go func() {
+		workId := 0
+		for {
+			select {
+			case <-end:
+				for _, w := range workers {
+					w.Stop()
+				}
+				return
+			case work := <-input:
+				worker := <-WorkerChannel // wait for available channel
+				worker <-work // dispatch work to worker
+			default:
+				artwork, err := artworkModel.GetArtForRender()
+				if err != nil {
+					if errors.Is(err, models.ErrNoRecord) {
+						fmt.Println("no art to render")
+						time.Sleep(5 * time.Second)
+					} else {
+						fmt.Println(err)
+						time.Sleep(100 * time.Second)
+					}
+					continue
+				}
+				// fmt.Println("got the artwork", artwork.ID)
+				input <- Work{ID:workId, Job: artwork}
+				workId += 1
+			}
+		}
+	}()
+	return collector
+}

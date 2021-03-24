@@ -11,6 +11,8 @@ import (
 	"saint-angels/shaderbox/pkg/models"
 	"saint-angels/shaderbox/pkg/models/mysql"
 	_ "github.com/go-sql-driver/mysql"
+
+	"saint-angels/shaderbox/pkg/renderer"
 )
 
 type contextKey string
@@ -22,8 +24,9 @@ type application struct {
 	infoLog *log.Logger
 	artworks interface {
 		Insert() (int, error)
-		GetOldestUnrendered() (*models.Artwork, error)
+		GetArtForRender() (*models.Artwork, error)
 	}
+	collector *renderer.Collector
 }
 
 func main() {
@@ -35,7 +38,6 @@ func main() {
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate | log.Ltime)
 	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate | log.Ltime | log.Lshortfile)
 
-
 	//Get pool of database connections
     db, err := sql.Open("mysql", *dsn)
 	if err != nil {
@@ -46,11 +48,18 @@ func main() {
     }
 	defer db.Close()
 
+	artworkmodel := &mysql.ArtworkModel{DB: db}
 	app := &application {
 		infoLog: infoLog,
 		errorLog: errorLog,
-		artworks: &mysql.ArtworkModel{DB: db},
+		artworks: artworkmodel,
 	}
+
+	//Start the render worker pool
+	collector := renderer.StartDispatcher(1, artworkmodel)
+	defer func() {
+		collector.End <- true
+	}()
 
 	srv := &http.Server {
 		Addr: *addr,

@@ -6,7 +6,9 @@ USE shaderbox;
 
 CREATE TABLE artworks (
     id INTEGER NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    created DATETIME NOT NULL
+    created DATETIME NOT NULL,
+    rendering BOOL DEFAULT false,
+    rendered BOOL DEFAULT false
 );
 -- Add an index on the created column.
 CREATE INDEX idx_artworks_created ON artworks(created);

@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-    "saint-angels/shaderbox/pkg/renderer"
     "fmt"
 )
 
@@ -17,10 +16,9 @@ func (app *application) generate(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    err = renderer.Render(id)
     if err != nil {
-       app.serverError(w, err)
-       return
+        app.serverError(w, err)
+        return
     }
 
     reply := fmt.Sprintf("art id:%d", id)
