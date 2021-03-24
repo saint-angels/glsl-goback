@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"saint-angels/glsl-goback/pkg/models"
-	"saint-angels/glsl-goback/pkg/models/mysql"
+	"saint-angels/shaderbox/pkg/models"
+	"saint-angels/shaderbox/pkg/models/mysql"
 	_ "github.com/go-sql-driver/mysql"
 )
 

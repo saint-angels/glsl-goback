@@ -2,7 +2,7 @@ package main
 
 import (
 	"net/http"
-    "saint-angels/glsl-goback/pkg/renderer"
+    "saint-angels/shaderbox/pkg/renderer"
     "fmt"
 )
 

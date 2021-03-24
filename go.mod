@@ -1,4 +1,4 @@
-module saint-angels/glsl-goback
+module saint-angels/shaderbox
 
 go 1.16
 

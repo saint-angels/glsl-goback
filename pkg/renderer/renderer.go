@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"errors"
-	"saint-angels/glsl-goback/pkg/models"
+	"saint-angels/shaderbox/pkg/models"
 	"io"
 	"bytes"
 )

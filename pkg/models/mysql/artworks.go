@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	// "errors"
 
-	"saint-angels/glsl-goback/pkg/models"
+	"saint-angels/shaderbox/pkg/models"
 )
 
 type ArtworkModel struct {
